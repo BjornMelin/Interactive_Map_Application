@@ -1,0 +1,267 @@
+---
+title: "MAT213 Project #5"
+author: "Bjorn Melin"
+date: "4/23/2019"
+runtime: shiny
+output: html_document
+---
+
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(leaflet)
+library(rgdal)
+library(maps)
+library(mapdata)
+library(broom)
+library(maptools)
+library(leaflet.extras)
+library(scales)
+#library(plyr)
+# When you use google to get place information, register your key.  
+# (You need to be connected to the web.)
+ggmap::register_google(key = "AIzaSyDwEoO3zb84PWYxp8_uK3z163Gkc4wLLKg")
+
+
+# Reads in the trip history data from the 2017 season dataset
+trip_hist_2017 <- read.csv(file = "Nice_ride_data_2017_season/Nice_ride_trip_history_2017_season.csv")
+
+
+# Reads in the station data from the 2017 season dataset
+station_locations_2017 <- read.csv(file = "Nice_ride_data_2017_season/Nice_Ride_2017_Station_Locations.csv")
+
+```
+
+
+
+
+
+```{r, echo=FALSE,message=FALSE}
+# Uses lubridate package to tidy the datasets.  I added columns for the dates 
+# in the trip history dataset so that they were formatted in an easier to work 
+# with fashion for when data wrangling to create my graphics.  
+# Then selected all variables excluding the old dates.
+trip_hist_2017_tidy <- trip_hist_2017 %>% mutate(start = mdy_hm(Start.date),
+                                                 end=mdy_hm(End.date)) %>% 
+  select(start, end, Start.station.number, Start.station, End.station, End.station.number,
+         Account.type, Total.duration..Seconds.)
+#glimpse(trip_hist_2017_tidy)
+
+#### Want to find a way to plot a line showing the amount of rides per 
+#### week over the course of the season
+# Modifies the tidied trip history data table so that it counts the number of times
+# a rider started at a specific time, then arranges by increasing start time.
+riders_start <- trip_hist_2017_tidy %>% 
+  group_by(start) %>% 
+  summarize(N = n()) %>% 
+  arrange(start) 
+#riders_start
+
+# Create a data set which is the same as the one created for the start
+# counts, but rather with the end counts.  So that we can plot both
+# start and end on the same plot.
+riders_end <- trip_hist_2017_tidy %>% 
+  group_by(end) %>% 
+  summarize(N = n()) %>% 
+  arrange(end)
+riders_end
+
+riders_per_week <- riders_start %>% group_by(week = floor_date(start, "week")) %>% 
+  select(week, N) %>% 
+  group_by(week) %>% 
+  summarize(N = n())
+#riders_per_week1
+
+# Modifies the riders_per_week table created above so that it sums up all rides
+# started at a specific time within each week of the season.  The output is a 
+# table in which the total number of rides taken each week is shown.
+riders_per_week <- riders_start %>% group_by(week = floor_date(start, "week")) %>% 
+  select(week, N) %>% 
+  group_by(week) %>% 
+  summarize(N = n())
+#riders_per_week1
+
+# Converts the week column in riders_per_week1 to be formatted as dates in R
+week <- as.Date(riders_per_week$week)
+# Puts the new "week" as date data into its own data frame
+dates <- as.data.frame(week)
+#dates
+
+# modifies riders_per_week1 by selecting on the N column, then column binding
+# it with the newly created dates table.  Since both dates and count were 
+# sorted to match up in the previous tables, the counts and weeks will still
+# match up correctly.
+riders_per_week1 <- riders_per_week1 %>% select(N) %>% 
+  cbind(dates) %>% 
+  select(week, N)
+
+# Creates a ggplot that is the same as Plot A but instead of using geom_line()
+# to connect each Count point, it uses geom_smooth() to shows a smooth line 
+# of best fit denoting the changes in bike rides taken per week.  
+# It also includes a standard error for the fitted curve.  
+riders_per_week1_plot2 <- ggplot(data = riders_per_week1, aes(x = week, y = N)) +
+  geom_point() +
+  geom_smooth() +
+  scale_x_date(date_breaks = "1 week", date_labels =  "%b-%Y-%d") +
+  theme(axis.text.x=element_text(angle=60, hjust=1)) +
+  xlab(label = "Week") +
+  ylab(label = "Number of Rides Each Week") +
+  ggtitle(label = "Bike Rides Taken Each Week Throughout the Season (2017)",
+          subtitle = "(Line of Best Fit & Standard Error)") +
+  theme(plot.title = element_text(size = rel(1.2), face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = rel(1), face = "italic", hjust = 0.5),
+        axis.text.x = element_text(face = "bold", size = rel(0.8)),
+        axis.title = element_text(face = "bold", size = rel(0.9))) 
+```
+
+
+```{r, echo=FALSE}
+# Creates a new data frame which will modify the riders_per_week2 data
+# frame so that it can be plotted as an interactive time series 
+# using a dygraph
+week_dygraph_data <- riders_per_week %>%
+  mutate(day = yday(week)) %>% 
+  select(day, N)
+
+# Creates a dygraph representation of riders_per_week3
+#### Need to add x labels for weeks ####
+weekly_plot <- dygraph(week_dygraph_data, 
+        main = "Bike Rides Taken Each Week Throughout the Season (2017)",
+        xlab = "Day Number in the Year (By Week)",
+        ylab = "Number of Rides Each Week")
+
+# Modifies the riders_per_week table created above so that it sums up all rides
+# started at a specific time within each day of the season.  The output is a 
+# table in which the total number of rides taken each day is shown.
+riders_per_day <- riders_per_week %>% 
+  group_by(day = floor_date(start, "day")) %>% 
+  select(day, N) %>% 
+  group_by(day) %>% 
+  summarize(N = n())
+glimpse(riders_per_day)
+
+# Creates a new data frame which will modify the riders_per_week2 data
+# frame so that it can be plotted as an interactive time series 
+# using a dygraph
+day_dygraph_data <- riders_per_day %>%
+  mutate(day = yday(day)) %>% 
+  select(day, N)
+
+
+# Creates a dygraph representation of riders_per_week3
+#### Need to add x labels for weeks ####
+daily_plot <- dygraph(day_dygraph_data, 
+        main = "Bike Rides Taken Each Week Throughout the Season (2017)",
+        xlab = "Day Number in the Year (By Week)",
+        ylab = "Number of Rides Each Week")
+
+
+# Modifies the riders_per_week table created above so that it sums up all rides
+# started at a specific time within each day of the season.  The output is a 
+# table in which the total number of rides taken each day is shown.
+riders_per_month <- riders_per_week %>% 
+  group_by(month = floor_date(start, "month")) %>% 
+  select(month, N) %>% 
+  group_by(month) %>% 
+  summarize(N = n())
+glimpse(riders_per_month)
+
+# Creates a new data frame which will modify the riders_per_week2 data
+# frame so that it can be plotted as an interactive time series 
+# using a dygraph
+month_dygraph_data <- riders_per_month %>%
+  mutate(day = yday(month)) %>% 
+  select(day, N)
+
+# Creates a dygraph representation of riders_per_week3
+#### Need to add x labels for weeks ####
+monthly_plot <- dygraph(month_dygraph_data, 
+        main = "Bike Rides Taken Each Week Throughout the Season (2017)",
+        xlab = "Day Number in the Year (By Week)",
+        ylab = "Number of Rides Each Week")
+
+```
+
+
+
+
+
+```{r, echo=FALSE,message=FALSE}
+# This section is used to easily reference all of my plots
+#map_plot
+#map_plot_2
+#riders_per_week1_plot2
+```
+
+
+```{r,echo=FALSE,message=FALSE,eval=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(shiny)  # This is needed
+library(tidyverse)
+library(tidyverse)
+library(lubridate)
+library(ggthemes)
+library(plotly)
+library(dygraphs)
+library(shiny)
+library(macleish)
+
+# Define plot input names
+plot_names <- c("Nice Ride Stations Locations In MPLS/STP", 
+                "Top 5 Nice Ride Starting Stations In MPLS/STP",
+                "Bike Rides Taken Each Week Throughout The 2017 Bike Season")
+```
+
+
+<!-- Define the inputs that you will use -->
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+      selectInput("plot_choice",
+                  label = "Chose A Plot To Display",
+                  choices = list("Daily", "Weekly", "Monthly"))
+
+    # Main panel for displaying outputs ----
+    mainPanel(plotOutput(outputId = "plot"),
+              position = "center")
+```
+
+
+```{r, echo=FALSE, message=FALSE}
+server <- function(input, output) {
+  
+  datasetInput <- reactive({
+    
+    data <- switch(input$plot_choice,
+                   "Daily" = daily_plot,
+                   "Weekly" = weekly_plot,
+                   "Monthly" = monthly_plot)
+  })
+  
+  output$plot <- renderPlot({
+    
+    # Displays as output the time plot in which the user want to view
+    plot(datasetInput())
+    
+    
+  })
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

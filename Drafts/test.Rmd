@@ -1,0 +1,93 @@
+---
+title: 'MAT213 Project #5'
+author: "Bjorn Melin"
+date: "4/27/2019"
+output: html_document
+runtime: shiny
+---
+
+
+```{r setup, include=FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(shiny)  # This is needed
+library(tidyverse)
+library(ggmap)
+library(leaflet)
+library(rgdal)
+library(maps)
+library(mapdata)
+library(knitr)
+library(plyr)
+# When you use google to get place information, register your key.  
+# (You need to be connected to the web.)
+ggmap::register_google(key = "AIzaSyDwEoO3zb84PWYxp8_uK3z163Gkc4wLLKg")
+```
+
+
+
+```{r, echo=FALSE}
+# Summarizes all states in the US so that we can create a data 
+# frame which contains all state abbreviations of states in the 
+# US.  This will be selected from in the app.
+#state_names <- us.cities %>% 
+#  group_by(country.etc) %>% 
+#  summarize(state = unique(country.etc)) %>% 
+#  arrange(state)
+#View(state_names)
+
+# load in state data from a csv file.  Same as we used 
+# for the quiz 6
+state_data <- read_csv('states_abbreviation.csv') %>%
+  mutate(state_lower = str_to_lower(state))
+state_data
+
+us.cities
+
+# Create a map data frame containing all county data.
+# Note that the variable 'region' denotes the state
+# in which a county is in
+#counties <- map_data("county")
+#counties
+
+map_data("county", region = "minnesota")
+```
+
+<!-- Define the inputs that you will use -->
+
+The goal of this graphic is to modify the graphic which was created for quiz 6 by making it so that you are able to see the county lines in state individually 
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+     selectInput(inputId = "state",
+                 label = "Select A State To View",
+                 choices = state_data$state,
+                 selected = "Minnesota")
+```
+
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+renderPlot({
+  
+  user_state <- state_data %>% 
+    filter(state == input$state)
+  
+  state_final <- user_state %>% 
+    select(state_lower)
+  
+  state_abbrev <- user_state %>% 
+    select(abbreviation)
+
+  # This plot displays the 
+  map_data("state", region = state_final) %>% 
+    ggplot() +
+    geom_polygon(aes(x = long, y = lat, fill = region, group = group), 
+                  color = "white") + coord_fixed(1.3)
+  
+  #map_data("county", region = state_final) %>% 
+  #ggplot() +
+  #  geom_polygon(aes(x=long, y = lat, group = group, fill = subregion), 
+  #             color = "black") + coord_fixed(1.3)
+  
+  }) 
+```
+
+

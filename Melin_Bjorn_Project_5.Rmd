@@ -1,0 +1,200 @@
+---
+title: 'MAT213 Project #5'
+author: "Bjorn Melin"
+date: "4/28/2019"
+output: html_document
+runtime: shiny
+---
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggmap)
+library(leaflet)
+library(rgdal)
+library(maps)
+library(mapdata)
+library(broom)
+library(maptools)
+library(leaflet.extras)
+library(scales)
+library(dplyr)
+#library(plyr)
+# When you use google to get place information, register your key.  
+# (You need to be connected to the web.)
+ggmap::register_google(key = "AIzaSyDwEoO3zb84PWYxp8_uK3z163Gkc4wLLKg")
+
+# Reads in the trip history data from the 2017 season dataset
+trip_hist_2017 <- read.csv(file = "Nice_ride_data_2017_season/Nice_ride_trip_history_2017_season.csv")
+
+# Reads in the station data from the 2017 season dataset
+station_locations_2017 <- read.csv(file = "Nice_ride_data_2017_season/Nice_Ride_2017_Station_Locations.csv")
+```
+
+
+
+
+```{r, echo=FALSE, message=FALSE}
+# I need to create the map using the station_locations_2017 data
+#glimpse(station_locations_2017)
+
+# Makes a google map of the Minneapolis/St Paul area
+msp_map <- get_map(location=c("Minneapolis/St Paul, Minnesota"),maptype = "roadmap",zoom=11)
+#ggmap(msp_map)
+
+# Creates a ggplot with points denoting the location of all bike stations
+# in the Minneapolis area
+station_plot <- ggplot() +
+  geom_point(data = station_locations_2017, aes(x= Longitude, y = Latitude)) +
+  coord_fixed(ratio = 1.3)
+#station_plot
+
+
+# NOTE: This plot was originally added onto in the apps output but instead,
+# the plot was not called directly.  Rather, the structure of this plot was 
+# used in the output so that we could use fills and alpha values for more 
+# clear results.
+# Combines the map of Minneapolis generated and the plot of the bike stations
+# in the Minneapolis area.  Used xlim and ylim to make the point more easy to
+# differentiate.
+station_map <- ggmap(msp_map) +
+  geom_point(data = station_locations_2017, aes(x= Longitude, y = Latitude), 
+             size = 1, alpha = 0.75, color = "white") +
+  coord_fixed(ratio = 1.3, xlim = c(-93.4,-93.0), ylim = c(44.85,45.075)) +
+  xlab(label = "Longitude") + 
+  ylab(label = "Latitude") +
+  theme(axis.title = element_text(face = "bold", size = rel(1)),
+        plot.title = element_text(size = rel(1.2), face = "bold", hjust = 0.5))
+#station_map
+```
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Reads in the shapefile of the neighborhood boundaries in Minneapolis 
+NBHD_MPLS <- readOGR(dsn = "Communities", verbose = FALSE)
+
+# Displays the variable names of the shapefile
+#names(NBHD_boundary)
+
+# Reads in the shapefile of the neighborhood boundaries in STP
+NBHD_STP <- readOGR(dsn = "STP_Neighborhoods", verbose = FALSE)
+
+# Used to check what the variables represented in the STP shapefile
+# as.data.frame(NBHD_STP)
+# names(NBHD_STP)
+```
+
+
+```{r, echo=FALSE,message=FALSE, warning=FALSE}
+# Creates a variable containing all names of the neighborhoods in MPLS
+mpls_neighborhoods <- c("Camden", "Northeast", "Near North",
+                    "Central", "University",
+                    "Calhoun Isle", "Powderhorn", "Longfellow", "Southwest", 
+                    "Nokomis", "Phillips")
+  
+# Creates a variable containing all names of the neighborhoods in STP
+stp_neighborhoods <- c("St Anthony Park", "Como", 
+                   "North End", "Hamline-Midway",
+                   "Macalester-Groveland", "Highland", 
+                   "West Side Community Organization", "Summit Hill Association",
+                   "Summit-University", "Thomas-Dale/Frogtown", 
+                   "West 7th Federation/Fort Road", "CapitolRiver Council",
+                   "Payne-Phalen", "The Greater East Side",
+                   "Dayton's Bluff", "Eastview-Conway-Battle Creek-Highwood Hills",
+                   "Union Park")
+```
+
+
+The app created for this project was constructed by using one of the static maps created in project 4.  The map used from project 4 shows all Nice Ride Station locations in Minneapolis and St. Paul on a static map of the area.  The purpose of creating this graphic in project 4 was to answer the question of where all Nice Ride Station locations are in the Minneapolis/St. Paul area.  The graphic clearly answered this question by displaying all Nice Ride Station locations as points on a static map of the area, which could be useful for someone wanting to plan a bike ride, figuring out where to pickup/drop off a bike, and deciding whether it is worth it in the first place to take a Nice Ride bike.
+
+I wish to make this graphic interactive by creating a shiny app which will let a user select a neighborhood from either or both Minneapolis and St. Paul by selecting from two drop down lists containing all of the neighborhoods in each city, respectively.  An interactive data graphic is warrented for these elements because it will allow a user to choose between neighborhoods in each city and see the Nice Ride Stations which are located in each neighborhood on the static map.  Implementing a interactive data graphic through a shiny app will accomplish exactly what I wish to accomplish through this project, very clearly.
+
+The first step to creating the interactive data graphic I desired for this project was importing shapefiles containing boundary data for neighborhoods in Minneapolis and St. Paul.  The source of the shapefile imported for Minneapolis neighborhood data is (http://opendata.minneapolismn.gov/datasets/communities) and the source of the shapefile imported for St. Paul neighborhood data is (https://information.stpaul.gov/City-Administration/District-Council-Shapefile-Map/dq4n-yj8b).  Once I had imported these shapefiles into my project, I created new variables `mpls_neighborhoods` and `stp_neighborhoods` which contained all of the neighborhood names for each city, as depicted by the corresponding shapefile.  These variables were used in my app to be the choices for the users input.
+
+The output of the app which was created for this project includes two plots.  The first plot will display the map of all Nice Ride Station locations.  It will highlight whichever Minneapolis neighborhood the user selected from the dropdown list and display points denoting Station locations over the polygon denoting the neighborhood so that the user is able to see all locations within the selected neighborhood.  The second plot will display the exact same information as the first plot execept it will allow the user to view Nice Ride Station locations within each neighborhood in St. Paul instead of Minneapolis.
+
+The purpose of showing the Minneapolis and St. Paul plots seperately is so that a user is able to compare the density/number of station locations between neighborhoods of both cities with one another.  Also, so that a user can quickly find a station which would be best for their trip.  This could help a user when planning a trip within each city individually and also if they wished to plan a trip biking between cities.  Allowing a user to see which neighborhood would be their best bet for finding Nice Ride Stations given their trip.  Avoiding the hastle of having to analyze the map to figure out which area exactly they want observe for Nice Ride Stations.  The graphic does exactly what I indended it to do.  Using the original graphic from project 4, by adding in neighborhood shapefiles and through data wrangling, an interactive data graphic was created in which a user selects a neighborhood from either or both Minneapolis and St. Paul from two drop down lists containing all neighborhoods in each city, respectively.  The aesthetics added to this interactive data graphic allow a user to easily and clearly see the information that they are looking for.
+
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# User choices for which neighborhood to highlight Nice Ride Locations in (MPLS)
+selectInput("mplsNBHDchoice",
+              label = "Select MPLS Neighborhood To Display",
+              choices = mpls_neighborhoods)
+
+# User choices for which neighborhood to highlight Nice Ride Locations in (STP)
+selectInput("stpNBHDchoice",
+              label = "Select STP Neighborhood To Display",
+              choices = stp_neighborhoods)
+
+```
+
+
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# renderPlot for creating the Minneapolis Plot, 
+# highlighting the selected neighborhood
+renderPlot({
+
+      # Creates a subset from the NBHD_MPLS shapefile which includes only the 
+      # the neighborhood which the user inputted.
+      msp_data <- subset(NBHD_MPLS, CommName %in% input$mplsNBHDchoice) %>% 
+            spTransform(CRS("+init=epsg:4326"))
+         
+      
+      # Creates the output plot for MPLS neighborhoods.
+      # Instead of directly calling on station_map then adding the polygon for the 
+      # input neighborhood, the station_map was recreated for both MPLS and STP
+      # plots.  This was done so that I could clearly display the stations in 
+      # each neighborhood using different fills and levels of alpha.  The best
+      # incorporation of fills I thought required that the points be plotted 
+      # after the polygon so that they were a layer above the polygon rather 
+      # than being shown behind the neighborhood polygon.
+      ggmap(msp_map) +
+        geom_polygon(data = msp_data, aes(x = long, y = lat, group = group),
+                     color = "black", fill = "blue", alpha = 0.4) + coord_fixed(1.3) +
+        geom_point(data = station_locations_2017, aes(x= Longitude, y = Latitude), 
+                     size = 0.8, color = "white") +
+        xlab(label = "Longitude") + 
+        ylab(label = "Latitude") +
+        ggtitle(label = "Nice Ride Bike Station Locations In MPLS Neighborhood (2017)") +
+        theme(axis.title = element_text(face = "bold", size = rel(1)),
+                plot.title = element_text(size = rel(1.2), face = "bold", hjust = 0.5)) +
+        coord_fixed(1.3, xlim = c(-93.4, -93.0),ylim=c(44.85, 45.075))
+
+})
+
+# renderPlot for creating the Saint Paul Plot, 
+# highlighting the selected neighborhood
+renderPlot({
+
+      # Creates a subset from the NBHD_STP shapefile which includes only the 
+      # the neighborhood which the user inputted.
+      stp_data <- subset(NBHD_STP, name2 %in% input$stpNBHDchoice) %>% 
+            spTransform(CRS("+init=epsg:4326"))
+         
+      
+      # Creates the output polot for STP neighborhoods, following the same 
+      # fashion as that of the MPLS neighborhoods plot in the last renderPlot.
+      ggmap(msp_map) +
+        geom_polygon(data = stp_data, aes(x = long, y = lat, group = group),
+                   color = "black", fill = "red", alpha = 0.4) + coord_fixed(1.3) +
+        geom_point(data = station_locations_2017, aes(x= Longitude, y = Latitude), 
+                   size = 0.8, color = "white") +
+        xlab(label = "Longitude") + 
+        ylab(label = "Latitude") +
+        ggtitle(label = "Nice Ride Bike Station Locations In STP Neighborhood (2017)") +
+        theme(axis.title = element_text(face = "bold", size = rel(1)),
+                plot.title = element_text(size = rel(1.2), face = "bold", hjust = 0.5)) +
+        coord_fixed(1.3, xlim = c(-93.4, -93.0),ylim=c(44.85, 45.075))
+         
+})
+```
+
+
+
+
+
+
+
