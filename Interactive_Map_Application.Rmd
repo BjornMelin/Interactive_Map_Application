@@ -1,5 +1,5 @@
 ---
-title: 'MAT213 Project #5'
+title: 'Interactive Map Application'
 author: "Bjorn Melin"
 date: "4/28/2019"
 output: html_document
